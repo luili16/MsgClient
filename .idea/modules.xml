@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/jingyuxiaoban.iml" filepath="$PROJECT_DIR$/.idea/modules/jingyuxiaoban.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/jingyuxiaoban_main.iml" filepath="$PROJECT_DIR$/.idea/modules/jingyuxiaoban_main.iml" group="jingyuxiaoban" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/jingyuxiaoban_test.iml" filepath="$PROJECT_DIR$/.idea/modules/jingyuxiaoban_test.iml" group="jingyuxiaoban" />
+    </modules>
+  </component>
+</project>

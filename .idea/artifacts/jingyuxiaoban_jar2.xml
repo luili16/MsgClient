@@ -1,0 +1,17 @@
+<component name="ArtifactManager">
+  <artifact name="jingyuxiaoban:jar2">
+    <output-path>$PROJECT_DIR$/classes/artifacts/jingyuxiaoban_jar2</output-path>
+    <root id="root">
+      <element id="archive" name="jingyuxiaoban.jar">
+        <element id="directory" name="META-INF">
+          <element id="file-copy" path="$PROJECT_DIR$/resources/META-INF/MANIFEST.MF" />
+        </element>
+        <element id="module-output" name="jingyuxiaoban_main" />
+      </element>
+      <element id="directory" name="lib">
+        <element id="file-copy" path="$PROJECT_DIR$/libs/netty-all-4.1.29.Final.jar" />
+        <element id="library" level="project" name="Gradle: io.reactivex.rxjava2:rxjava:2.2.2" />
+      </element>
+    </root>
+  </artifact>
+</component>
