@@ -1,37 +1,34 @@
 package com.llx278.msgclient;
 
-import com.llx278.msgclient.protocol.MsgFrame;
+import com.llx278.msgclient.protocol.MsgValue;
+import com.llx278.msgclient.protocol.TLV;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.util.Attribute;
-import io.netty.util.ReferenceCountUtil;
 
-public class InMsgHandler extends SimpleChannelInboundHandler<ByteBuf> {
+
+public class InMsgHandler extends ChannelInboundHandlerAdapter {
 
     public static final String NAME = "InMsgHandler";
 
-    private ByteBuf msg;
-
     @Override
-    protected void channelRead0(ChannelHandlerContext ctx, ByteBuf msg) throws Exception {
-        this.msg = msg;
-    }
+    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
 
-    @Override
-    public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
+        ByteBuf buf = (ByteBuf) msg;
 
-        if (msg.refCnt() == 0) {
-            msg = ReferenceCountUtil.retain(msg);
+        TLV tlv = TLV.unCompositeTlvFrame(buf);
+        if (tlv == null) {
+            return;
         }
 
-        MsgFrame msgFrame = MsgFrame.valueOf(msg);
-
+        MsgValue value = MsgValue.valueOf(tlv.getValue());
+        tlv.getValue().release();
         Attribute<AsyncClient> attr = ctx.channel().attr(AsyncClient.sClientAttr);
         AsyncClient asyncClient = attr.get();
-        asyncClient.onMsgReceived(msgFrame.getValue());
-        ReferenceCountUtil.release(msg,msg.refCnt());
+        asyncClient.onMsgReceived(value);
     }
+
 }
 
 

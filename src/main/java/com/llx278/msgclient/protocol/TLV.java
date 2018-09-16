@@ -3,39 +3,60 @@ package com.llx278.msgclient.protocol;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.CompositeByteBuf;
 import io.netty.buffer.Unpooled;
+import io.netty.util.ReferenceCountUtil;
 
 public class TLV {
 
-    public static ByteBuf composite(BaseFrame baseFrame) {
-        ByteBuf tlv = Unpooled.buffer();
-        tlv.writeInt(baseFrame.type);
-        tlv.writeInt(baseFrame.value.length());
-        baseFrame.value.writeTo(tlv);
-        return tlv;
+    private final int type;
+    private final int len;
+    private final ByteBuf value;
+
+    public TLV(int type, int len, ByteBuf value) {
+        this.type = type;
+        this.len = len;
+        this.value = value;
     }
 
-    public static ByteBuf composite(int type, int length, ByteBuf value) {
-        CompositeByteBuf buf = Unpooled.compositeBuffer();
-        ByteBuf tl = Unpooled.buffer();
+    public int getType() {
+        return type;
+    }
+
+    public int getLen() {
+        return len;
+    }
+
+    public ByteBuf getValue() {
+        return value;
+    }
+
+    public static void compositeTlvFrame(int type, BaseValue value, CompositeByteBuf dst, ByteBuf tl, ByteBuf v) {
         tl.writeInt(type);
-        tl.writeInt(length);
-        buf.addComponents(true,tl,value);
-        return buf;
+        value.writeTo(v);
+        tl.writeInt(v.readableBytes());
+        dst.addComponents(true,tl,v);
     }
 
-    public static ByteBuf composite(int type,int length,byte[] value) {
-        ByteBuf tlv = Unpooled.buffer();
-        tlv.writeInt(type);
-        tlv.writeInt(length);
-        tlv.writeBytes(value);
-        return tlv;
+    /**
+     * 直接写入
+     * @param type type
+     * @param dst dst
+     * @param tl tl
+     * @param v v
+     */
+    public static void quickCompositeTlvFrame(int type,CompositeByteBuf dst,ByteBuf tl,ByteBuf v) {
+        tl.writeInt(type);
+        tl.writeInt(v.readableBytes());
+        dst.addComponents(true,tl,v);
     }
 
-    public static ByteBuf composite(int type,int length,int value) {
-        ByteBuf tlv = Unpooled.buffer();
-        tlv.writeInt(type);
-        tlv.writeInt(length);
-        tlv.writeInt(value);
-        return tlv;
+    public static TLV unCompositeTlvFrame(ByteBuf tlvBuf) {
+        int type = tlvBuf.readInt();
+        int len = tlvBuf.readInt();
+        if (len != tlvBuf.readableBytes()) {
+            System.out.println("invalid tlv frame! expected len is " + len + " actual len is " + tlvBuf.readableBytes());
+            return null;
+        }
+
+        return new TLV(type,len,tlvBuf);
     }
 }

@@ -1,9 +1,10 @@
 package com.llx278.msgclient;
 
-import com.llx278.msgclient.protocol.HeartBeatFrame;
+import com.llx278.msgclient.protocol.HeartBeatValue;
 import com.llx278.msgclient.protocol.TLV;
 import com.llx278.msgclient.protocol.Type;
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.CompositeByteBuf;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
@@ -23,13 +24,16 @@ public class InHeartBeatHandler extends ChannelInboundHandlerAdapter {
             if (e.state() == IdleState.WRITER_IDLE) {
                 Attribute<Integer> uidAttr = ctx.channel().attr(AsyncClient.sUidAttr);
                 Integer uid = uidAttr.get();
-                HeartBeatFrame hb = new HeartBeatFrame(Type.FRAME_HEART,new HeartBeatFrame.Value(uid));
-                ByteBuf msg = TLV.composite(hb);
-                ChannelFuture f = ctx.writeAndFlush(msg);
+
+                CompositeByteBuf tlv = ctx.alloc().compositeBuffer();
+                ByteBuf tl = ctx.alloc().buffer();
+                ByteBuf v = ctx.alloc().buffer();
+                HeartBeatValue.quickWrite(uid,v);
+                TLV.quickCompositeTlvFrame(Type.FRAME_HEART,tlv,tl,v);
+                ChannelFuture f = ctx.writeAndFlush(tlv);
                 f.addListener(future -> {
                 });
             }
-
             return;
         }
 

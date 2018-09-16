@@ -14,20 +14,7 @@ public class OutMsgHandler extends ChannelOutboundHandlerAdapter {
 
     @Override
     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
-        if (msg instanceof ByteBuf) {
-            ByteBuf buf = (ByteBuf) msg;
-
-            if (buf.refCnt() == 0) {
-                buf = ReferenceCountUtil.retain(buf);
-            }
-            ByteBuf temp = buf.copy();
-            Debug.print(temp);
-            ctx.write(buf);
-
-            if (buf.refCnt() != 0) {
-                ReferenceCountUtil.release(buf);
-            }
-        }
+        ctx.writeAndFlush(msg);
     }
 
     @Override

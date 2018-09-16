@@ -1,6 +1,6 @@
 package com.llx278.msgclient;
 
-import com.llx278.msgclient.protocol.MsgFrame;
+import com.llx278.msgclient.protocol.ContentParser;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import org.junit.After;
@@ -36,7 +36,7 @@ public class ContentParserTest {
         buf.writeBytes(src);
         Map<String,String> headerMap = new HashMap<>();
 
-        MsgFrame.ContentParser.parse(headerMap,buf);
+        ContentParser.parse(headerMap,buf);
 
         System.out.println(headerMap.toString());
     }
@@ -49,7 +49,7 @@ public class ContentParserTest {
         headerMap.put("ddd","jkl");
         headerMap.put("mac","book pro");
 
-        String res = MsgFrame.ContentParser.toHeader(headerMap);
+        String res = ContentParser.toHeader(headerMap);
 
         System.out.println(res);
 

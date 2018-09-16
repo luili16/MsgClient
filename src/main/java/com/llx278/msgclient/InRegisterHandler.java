@@ -1,9 +1,10 @@
 package com.llx278.msgclient;
 
-import com.llx278.msgclient.protocol.RegisterFrame;
+import com.llx278.msgclient.protocol.RegisterValue;
 import com.llx278.msgclient.protocol.TLV;
 import com.llx278.msgclient.protocol.Type;
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.CompositeByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.util.Attribute;
@@ -17,11 +18,13 @@ public class InRegisterHandler extends ChannelInboundHandlerAdapter {
         System.out.println("channelactive 准备发送注册帧");
         Attribute<Integer> uidAttr = ctx.channel().attr(AsyncClient.sUidAttr);
         Integer uid = uidAttr.get();
-        RegisterFrame rf = new RegisterFrame(Type.FRAME_REGISTER,new RegisterFrame.Value(uid));
-        ByteBuf msg = TLV.composite(rf);
 
-        ctx.writeAndFlush(msg);
-
+        RegisterValue registerValue = new RegisterValue(uid);
+        CompositeByteBuf dst = ctx.alloc().compositeBuffer();
+        ByteBuf tl = ctx.alloc().buffer();
+        ByteBuf v = ctx.alloc().buffer();
+        TLV.compositeTlvFrame(Type.FRAME_REGISTER,registerValue,dst,tl,v);
+        ctx.writeAndFlush(dst);
         ctx.fireChannelActive();
     }
 
@@ -30,7 +33,7 @@ public class InRegisterHandler extends ChannelInboundHandlerAdapter {
         System.out.println("channelInactive 准备重新连接");
         Attribute<AsyncClient> clientAttr = ctx.channel().attr(AsyncClient.sClientAttr);
         AsyncClient asyncClient = clientAttr.get();
-        asyncClient.connect();
+        asyncClient.connect(AsyncClient.COUNT,AsyncClient.DELAY,AsyncClient.TIME_UNIT);
 
         ctx.fireChannelInactive();
     }
@@ -43,6 +46,6 @@ public class InRegisterHandler extends ChannelInboundHandlerAdapter {
 
         Attribute<AsyncClient> clientAttr = ctx.channel().attr(AsyncClient.sClientAttr);
         AsyncClient asyncClient = clientAttr.get();
-        asyncClient.connect();
+        asyncClient.connect(AsyncClient.COUNT,AsyncClient.DELAY,AsyncClient.TIME_UNIT);
     }
 }

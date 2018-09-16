@@ -1,9 +1,9 @@
 package com.llx278.msgclient;
 
-import com.llx278.msgclient.protocol.MsgFrame;
-import com.llx278.msgclient.protocol.Type;
+import com.llx278.msgclient.protocol.*;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.CompositeByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -16,33 +16,38 @@ import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.util.Attribute;
 import io.netty.util.AttributeKey;
 import io.netty.util.CharsetUtil;
+import io.netty.util.ResourceLeakDetector;
 import io.netty.util.concurrent.GenericFutureListener;
 import io.reactivex.Observable;
 import io.reactivex.ObservableSource;
 import io.reactivex.Observer;
 import io.reactivex.disposables.Disposable;
+import io.reactivex.exceptions.UndeliverableException;
 import io.reactivex.functions.Function;
+import io.reactivex.plugins.RxJavaPlugins;
 import io.reactivex.schedulers.Schedulers;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 public class AsyncClient {
 
     public static final AttributeKey<Integer> sUidAttr = AttributeKey.valueOf("uid");
     public static final AttributeKey<AsyncClient> sClientAttr = AttributeKey.valueOf("client");
 
-    // 写通道超时时间
+    // 写通道超时时间(心跳)
     private static final int WRITE_IDLE_TIME = 30;
     private static final TimeUnit WRITE_IDLE_TIME_UNIT = TimeUnit.MINUTES;
 
-    private static final int DELAY = 10;
-    private static final TimeUnit TIME_UNIT = TimeUnit.SECONDS;
+    public static final int COUNT = 5;
+    public static final int DELAY = 10;
+    public static final TimeUnit TIME_UNIT = TimeUnit.SECONDS;
 
 
     private final String mHost;
@@ -53,25 +58,17 @@ public class AsyncClient {
 
     private Disposable mDisposable;
 
-    private int mDelay;
-    private TimeUnit mTimeUnit;
-
     private MessageReceiveListener mListener;
 
-    private AsyncClient(String host, int port, int uid) {
-        this(host, port, uid, DELAY, TIME_UNIT);
+    public AsyncClient(String host, int port, int uid) {
+        mHost = host;
+        mPort = port;
+        mUid = uid;
         init();
     }
 
-    public AsyncClient(String host, int port, int uid, int delay, TimeUnit timeUnit) {
-        this.mHost = host;
-        this.mPort = port;
-        this.mUid = uid;
-        mDelay = delay;
-        mTimeUnit = timeUnit;
-    }
-
     private void init() {
+        ResourceLeakDetector.setLevel(ResourceLeakDetector.Level.PARANOID);
         EventLoopGroup mWorker = new NioEventLoopGroup();
         mBootStrap = new Bootstrap();
         mBootStrap.channel(NioSocketChannel.class);
@@ -106,30 +103,50 @@ public class AsyncClient {
         mListener = l;
     }
 
-    public void onMsgReceived(MsgFrame.Value msg) {
+    public void onMsgReceived(MsgValue msg) {
         if (mListener != null) {
             mListener.onMessageReceive(msg);
         }
     }
 
-    public void connect() {
+    public void connect(int retryCount, int delay, TimeUnit unit) {
+        System.out.println("准备连接");
         Observable<ChannelFuture> connect = Observable.create(emitter -> {
             ChannelFuture f = mBootStrap.connect();
             f.addListener(future -> {
+
+                if (future == null) {
+                    emitter.onError(new RuntimeException("connection failed!"));
+                    return;
+                }
+
                 if (future.isDone() && future.isSuccess()) {
                     emitter.onNext(f);
+                    emitter.onComplete();
+                    return;
                 }
 
                 if (future.isDone() && future.cause() != null) {
                     emitter.onError(future.cause());
                 }
-
-                emitter.onComplete();
             });
         });
         connect.subscribeOn(Schedulers.io()).
-                observeOn(Schedulers.io()).retryWhen(error -> error.
-                flatMap(throwable -> Observable.timer(mDelay, mTimeUnit))).
+                observeOn(Schedulers.io()).
+                retryWhen(exceptionObservable -> exceptionObservable.zipWith(Observable.range(0, retryCount), (exception, hasRetried) -> {
+                    System.out.println(exception.getMessage());
+                    return hasRetried;
+                }).flatMap(hasRetried -> {
+                    System.out.println("retry count : " + hasRetried);
+                    if (hasRetried == retryCount - 1) {
+                        System.out.println("connect failed cancel...");
+                        if (mDisposable != null) {
+                            mDisposable.dispose();
+                            mDisposable = null;
+                        }
+                    }
+                    return Observable.timer(delay, unit);
+                })).
                 flatMap((Function<ChannelFuture, ObservableSource<ChannelFuture>>) channelFuture -> {
                     System.out.println("连接 " + channelFuture.channel().remoteAddress() + " 成功");
                     return getCloseState(channelFuture);
@@ -142,10 +159,16 @@ public class AsyncClient {
 
                     @Override
                     public void onNext(ChannelFuture closeFuture) {
+                        System.out.println("onNext");
                     }
 
                     @Override
                     public void onError(Throwable e) {
+                        System.out.println(e.getMessage());
+                        if (mDisposable != null) {
+                            mDisposable.dispose();
+                            mDisposable = null;
+                        }
                     }
 
                     @Override
@@ -156,6 +179,12 @@ public class AsyncClient {
                         }
                     }
                 });
+        RxJavaPlugins.setErrorHandler(e -> {
+            if (e instanceof UndeliverableException) {
+                e = e.getCause();
+                System.out.println("e is : " + e.getMessage());
+            }
+        });
     }
 
     private Observable<ChannelFuture> getCloseState(ChannelFuture f) {
@@ -170,7 +199,7 @@ public class AsyncClient {
         });
     }
 
-    public Observable<ChannelFuture> writeMsg(int toUid, byte[] body, Map<String, String> header) {
+    public Observable<ChannelFuture> writeMsg(int toUid, String body, Map<String, String> header) {
         return Observable.create(emitter -> writeMsg(toUid, body, header, future -> {
             if (future.isDone() && future.isSuccess()) {
                 emitter.onNext(future);
@@ -184,48 +213,49 @@ public class AsyncClient {
         }));
     }
 
-    public void writeMsg(int toUid, byte[] body, Map<String, String> header, GenericFutureListener<ChannelFuture> listener) {
+    public void writeMsg(int toUid, String body, Map<String, String> header, GenericFutureListener<ChannelFuture> listener) {
 
-        System.out.println("准备发送消息 到 uid : " + toUid);
-        if (body.length > MsgFrame.Value.MAX_LENGTH) {
-            System.out.println("超出了value限制的长度 此时body的长度 : " + body.length);
+        if (body.length() > BaseValue.MAX_LENGTH) {
+            System.out.println("超出了value限制的长度 此时body的长度 : " + body.length());
             return;
         }
-        MsgFrame.Value value = new MsgFrame.Value(this.mUid,toUid,header,body);
-        MsgFrame mf = new MsgFrame(Type.FRAME_MSG,value);
-        System.out.println("len : " + value.length());
-        ByteBuf bf = Unpooled.buffer();
-        mf.writeToByteBuf(bf);
 
-        ChannelFuture f = mSocketChannel.writeAndFlush(bf);
+        ByteBuf v = Unpooled.buffer();
+        // 出于性能的要求，这个方法里面避免直接new对象和发生内存拷贝
+        MsgValue.quickWrite(mUid, toUid, header, body, v);
+        ByteBuf tl = Unpooled.buffer();
+        CompositeByteBuf tlv = Unpooled.compositeBuffer();
+        TLV.quickCompositeTlvFrame(Type.FRAME_MSG, tlv, tl, v);
+
+        ChannelFuture f = mSocketChannel.writeAndFlush(tlv);
         if (listener != null) {
             f.addListener(listener);
         }
     }
 
-    public void writeMsgQuietly(int toUid, byte[] body, Map<String, String> header) {
+    public void writeMsgQuietly(int toUid, String body, Map<String, String> header) {
         writeMsg(toUid, body, header, null);
     }
 
     public interface MessageReceiveListener {
-        void onMessageReceive(MsgFrame.Value msg);
+        void onMessageReceive(MsgValue msg);
     }
 
     public static void main(String[] args) {
 
-        String host = "172.18.8.119";
+        //String host = "172.18.8.119";
+        String host = "127.0.0.1";
 
-
-        int uid ;
+        int uid;
         if (args.length != 0) {
-           uid = Integer.parseInt(args[0]);
+            uid = Integer.parseInt(args[0]);
         } else {
             uid = 234;
         }
         //String mHost = "172.20.151.106";
 
         /*AsyncClient client = new AsyncClient(host, 12306, uid);
-        client.connect();
+        client.connect(4, 5, TimeUnit.SECONDS);
         client.setOnMesageReceivedListener(msg -> {
             System.out.println("收到消息 : " + msg.toString());
         });
@@ -239,10 +269,10 @@ public class AsyncClient {
                 String[] uidAndMsg = msg.split(":");
                 int toUid = Integer.parseInt(uidAndMsg[0]);
                 byte[] body = uidAndMsg[1].getBytes(CharsetUtil.UTF_8);
-                Map<String,String> header = new HashMap<>();
+                Map<String, String> header = new HashMap<>();
                 header.put("Content-Type", "txt");
                 header.put("Expanded-Name", ".txt");
-                client.writeMsgQuietly(toUid,body,header);
+                client.writeMsgQuietly(toUid, uidAndMsg[1], header);
 
             } catch (IOException e) {
                 e.printStackTrace();
@@ -255,31 +285,40 @@ public class AsyncClient {
         for (int i = 0; i < maxCount; i++) {
             final int fromUid = i;
             executor.execute(() -> {
+
+                AsyncClient client = new AsyncClient(host, 12306, fromUid);
+                client.connect(4, 5, TimeUnit.SECONDS);
+                client.setOnMesageReceivedListener(new MessageReceiveListener() {
+                    @Override
+                    public void onMessageReceive(MsgValue msg) {
+                        System.out.println(msg.toString());
+                    }
+                });
                 try {
-                    Thread.sleep(random.nextInt(2000) + 200);
+                    Thread.sleep(5000);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
-                AsyncClient client = new AsyncClient(host, 12306, fromUid);
-                client.connect();
-                client.setOnMesageReceivedListener(msg -> {
-                    System.out.println("msg : " + msg.toString());
-                });
+
                 while (true) {
                     try {
-                        Thread.sleep(5000);
+                        Thread.sleep(random.nextInt(2000) + 200);
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     }
-                    String txt = getRandomString(random.nextInt(1000));
+                    String body = getRandomString(random.nextInt(3000));
                     int toUid = random.nextInt(maxCount);
-
-                    byte[] body = txt.getBytes(CharsetUtil.UTF_8);
+                    CountDownLatch signal = new CountDownLatch(1);
                     Map<String, String> header = new HashMap<>();
                     header.put("Content-Type", "txt");
                     header.put("Expanded-Name", ".txt");
-                    client.writeMsgQuietly(toUid,body,header);
-                    System.out.println("写msg 结束");
+                    if (toUid == fromUid) {
+                        System.out.println("忽略自己给自己发消息");
+                        continue;
+                    }
+
+                    client.writeMsgQuietly(toUid, body, header);
+
                 }
             });
         }

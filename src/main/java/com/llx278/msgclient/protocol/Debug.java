@@ -26,7 +26,7 @@ public class Debug {
             int fromUid = buf.readInt();
             int toUid = buf.readInt();
             HashMap<String,String> header = new HashMap<>();
-            MsgFrame.ContentParser.parse(header,buf);
+            ContentParser.parse(header,buf);
             String body = buf.readCharSequence(buf.readableBytes(),CharsetUtil.UTF_8).toString();
             System.out.println("fromUid : " + fromUid + " toUid : " + toUid);
             System.out.println("header : " + header.toString());
@@ -39,6 +39,8 @@ public class Debug {
             int uid = buf.readInt();
             System.out.println("uid : " + uid);
             System.out.println("------ 心跳帧 结束-----");
+        } else {
+            System.out.println("unKnow type : " + type);
         }
 
     }

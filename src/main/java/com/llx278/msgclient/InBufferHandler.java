@@ -13,30 +13,53 @@ public class InBufferHandler extends ChannelInboundHandlerAdapter {
 
     public static final String NAME = "InBufferHandler";
 
-    private List<ByteBuf> mByteBufs = new LinkedList<>();
+    private List<ByteBuf> bufList = new LinkedList<>();
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
         ByteBuf buf = (ByteBuf) msg;
-        mByteBufs.add(buf);
+        bufList.add(buf);
     }
 
     @Override
     public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
 
+        CompositeByteBuf cb = ctx.alloc().compositeBuffer(bufList.size());
+        cb.addComponents(true,bufList);
 
-        CompositeByteBuf compositeByteBuf = ctx.alloc().compositeBuffer(mByteBufs.size());
-        compositeByteBuf.addComponents(true,mByteBufs);
+        try {
 
-        if (compositeByteBuf.readableBytes() == 0) {
-            System.out.println("-------- EOF --------- 与服务器的连接断开");
-            ctx.close();
-            return;
+            if (cb.readableBytes() == 0) {
+                System.out.println("-------- EOF --------- 与服务器的连接断开");
+                ctx.close();
+                return;
+            }
+
+
+            if (cb.readableBytes() < 8) {
+                System.out.println("没有读到长度，继续读!!");
+                ctx.read();
+                return;
+            }
+
+            int len = cb.getInt(4);
+            if (len != cb.readableBytes() - 8) {
+                System.out.println("没有读完，继续读!!");
+                ctx.read();
+                return;
+            }
+
+            ctx.fireChannelRead(cb);
+            ctx.fireChannelReadComplete();
+
+        } finally {
+            bufList.clear();
         }
-        compositeByteBuf = ReferenceCountUtil.retain(compositeByteBuf);
-        ctx.fireChannelRead(compositeByteBuf);
-        ctx.fireChannelReadComplete();
-        mByteBufs.clear();
-    }
 
+
+
+
+
+
+    }
 }
