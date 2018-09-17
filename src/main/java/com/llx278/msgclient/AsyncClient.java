@@ -306,7 +306,7 @@ public class AsyncClient {
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     }
-                    String body = getRandomString(random.nextInt(3000));
+                    String body = getRandomString(30000);
                     int toUid = random.nextInt(maxCount);
                     CountDownLatch signal = new CountDownLatch(1);
                     Map<String, String> header = new HashMap<>();

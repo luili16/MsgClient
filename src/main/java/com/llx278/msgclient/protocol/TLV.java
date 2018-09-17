@@ -7,6 +7,15 @@ import io.netty.util.ReferenceCountUtil;
 
 public class TLV {
 
+    /**
+     * 代表一个消息的起始
+     */
+    public static final int SYNC =   0xAAAAAAAA;
+    /**
+     * 代表一个消息的结束
+     */
+    public static final int FINISH = 0x55555555;
+
     private final int type;
     private final int len;
     private final ByteBuf value;

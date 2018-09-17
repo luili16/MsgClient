@@ -1,6 +1,7 @@
 package com.llx278.msgclient;
 
 import com.llx278.msgclient.protocol.Debug;
+import com.llx278.msgclient.protocol.TLV;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
@@ -14,7 +15,14 @@ public class OutMsgHandler extends ChannelOutboundHandlerAdapter {
 
     @Override
     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
-        ctx.writeAndFlush(msg);
+        ByteBuf sync = ctx.alloc().buffer();
+        ByteBuf finish = ctx.alloc().buffer();
+        sync.writeInt(TLV.SYNC);
+        finish.writeInt(TLV.FINISH);
+        ctx.write(sync);
+        ctx.write(msg);
+        ctx.write(finish);
+        ctx.flush();
     }
 
     @Override

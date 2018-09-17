@@ -17,49 +17,57 @@ public class InBufferHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+        System.out.println("channelRead");
         ByteBuf buf = (ByteBuf) msg;
         bufList.add(buf);
     }
 
+
     @Override
     public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
+        System.out.println("channelReadComplete");
 
-        CompositeByteBuf cb = ctx.alloc().compositeBuffer(bufList.size());
-        cb.addComponents(true,bufList);
+        ByteBuf tlvBuf = ctx.alloc().buffer();
+        for (ByteBuf buf : bufList) {
+            tlvBuf.writeBytes(buf);
+        }
 
-        try {
-
-            if (cb.readableBytes() == 0) {
-                System.out.println("-------- EOF --------- 与服务器的连接断开");
-                ctx.close();
-                return;
-            }
-
-
-            if (cb.readableBytes() < 8) {
-                System.out.println("没有读到长度，继续读!!");
-                ctx.read();
-                return;
-            }
-
-            int len = cb.getInt(4);
-            if (len != cb.readableBytes() - 8) {
-                System.out.println("没有读完，继续读!!");
-                ctx.read();
-                return;
-            }
-
-            ctx.fireChannelRead(cb);
-            ctx.fireChannelReadComplete();
-
-        } finally {
+        if (tlvBuf.readableBytes() == 0) {
+            System.out.println("-------- EOF --------- 与服务器的连接断开");
+            ctx.close();
+            tlvBuf.release();
             bufList.clear();
+            releaseBuffList();
+            return;
         }
 
 
+        if (tlvBuf.readableBytes() < 8) {
+            System.out.println("没有获取到消息的长度，继续读!!");
+            ctx.read();
+            tlvBuf.release();
+            return;
+        }
 
+        int len = tlvBuf.getInt(4);
+        if (len != tlvBuf.readableBytes() - 8) {
+            System.out.println("没有读完，继续读!! 期待的长度 : " + len + " 读取到的长度 : " + (tlvBuf.readableBytes() - 8));
+            ctx.read();
+            tlvBuf.release();
+            return;
+        }
+        releaseBuffList();
+        bufList.clear();
 
+        ctx.fireChannelRead(tlvBuf);
+        ctx.fireChannelReadComplete();
+    }
 
-
+    private void releaseBuffList() {
+        for (ByteBuf buf : bufList) {
+            if (buf.refCnt() != 0) {
+                buf.release();
+            }
+        }
     }
 }
