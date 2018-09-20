@@ -7,6 +7,9 @@ import io.netty.util.ReferenceCountUtil;
 
 public class TLV {
 
+    public static final byte[] SYNC_BYTES = new byte[]{(byte) 0xaa,(byte) 0xaa,(byte) 0xaa,(byte) 0xaa};
+    public static final byte[] FINISH_BYTES = new byte[]{(byte) 0x55,(byte) 0x55,(byte) 0x55,(byte) 0x55};
+
     /**
      * 代表一个消息的起始
      */

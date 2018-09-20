@@ -246,7 +246,7 @@ public class AsyncClient {
         //String host = "172.18.8.119";
         String host = "127.0.0.1";
 
-        int uid;
+        /*int uid;
         if (args.length != 0) {
             uid = Integer.parseInt(args[0]);
         } else {
@@ -254,7 +254,7 @@ public class AsyncClient {
         }
         //String mHost = "172.20.151.106";
 
-        /*AsyncClient client = new AsyncClient(host, 12306, uid);
+        AsyncClient client = new AsyncClient(host, 12306, uid);
         client.connect(4, 5, TimeUnit.SECONDS);
         client.setOnMesageReceivedListener(msg -> {
             System.out.println("收到消息 : " + msg.toString());

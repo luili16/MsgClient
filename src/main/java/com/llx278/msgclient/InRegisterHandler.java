@@ -24,7 +24,7 @@ public class InRegisterHandler extends ChannelInboundHandlerAdapter {
         ByteBuf tl = ctx.alloc().buffer();
         ByteBuf v = ctx.alloc().buffer();
         TLV.compositeTlvFrame(Type.FRAME_REGISTER,registerValue,dst,tl,v);
-        ctx.writeAndFlush(dst);
+        ctx.channel().writeAndFlush(dst);
         ctx.fireChannelActive();
     }
 
