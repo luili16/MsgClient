@@ -26,6 +26,9 @@ import io.reactivex.exceptions.UndeliverableException;
 import io.reactivex.functions.Function;
 import io.reactivex.plugins.RxJavaPlugins;
 import io.reactivex.schedulers.Schedulers;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -35,11 +38,14 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class AsyncClient {
 
     public static final AttributeKey<Integer> sUidAttr = AttributeKey.valueOf("uid");
     public static final AttributeKey<AsyncClient> sClientAttr = AttributeKey.valueOf("client");
+
+    private static final Logger sLogger = LogManager.getLogger(AsyncClient.class);
 
     // 写通道超时时间(心跳)
     private static final int WRITE_IDLE_TIME = 30;
@@ -110,7 +116,7 @@ public class AsyncClient {
     }
 
     public void connect(int retryCount, int delay, TimeUnit unit) {
-        System.out.println("准备连接");
+        sLogger.log(Level.DEBUG, "准备连接");
         Observable<ChannelFuture> connect = Observable.create(emitter -> {
             ChannelFuture f = mBootStrap.connect();
             f.addListener(future -> {
@@ -134,12 +140,12 @@ public class AsyncClient {
         connect.subscribeOn(Schedulers.io()).
                 observeOn(Schedulers.io()).
                 retryWhen(exceptionObservable -> exceptionObservable.zipWith(Observable.range(0, retryCount), (exception, hasRetried) -> {
-                    System.out.println(exception.getMessage());
+                    sLogger.log(Level.DEBUG, exception.getMessage());
                     return hasRetried;
                 }).flatMap(hasRetried -> {
-                    System.out.println("retry count : " + hasRetried);
+                    sLogger.log(Level.DEBUG, "retry count : " + hasRetried);
                     if (hasRetried == retryCount - 1) {
-                        System.out.println("connect failed cancel...");
+                        sLogger.log(Level.DEBUG, "connect failed cancel...");
                         if (mDisposable != null) {
                             mDisposable.dispose();
                             mDisposable = null;
@@ -148,7 +154,7 @@ public class AsyncClient {
                     return Observable.timer(delay, unit);
                 })).
                 flatMap((Function<ChannelFuture, ObservableSource<ChannelFuture>>) channelFuture -> {
-                    System.out.println("连接 " + channelFuture.channel().remoteAddress() + " 成功");
+                    sLogger.log(Level.DEBUG, "连接 " + channelFuture.channel().remoteAddress() + " 成功");
                     return getCloseState(channelFuture);
                 }).
                 subscribe(new Observer<ChannelFuture>() {
@@ -159,12 +165,12 @@ public class AsyncClient {
 
                     @Override
                     public void onNext(ChannelFuture closeFuture) {
-                        System.out.println("onNext");
+                        sLogger.log(Level.DEBUG, "onNext");
                     }
 
                     @Override
                     public void onError(Throwable e) {
-                        System.out.println(e.getMessage());
+                        sLogger.log(Level.DEBUG, e.getMessage());
                         if (mDisposable != null) {
                             mDisposable.dispose();
                             mDisposable = null;
@@ -182,7 +188,7 @@ public class AsyncClient {
         RxJavaPlugins.setErrorHandler(e -> {
             if (e instanceof UndeliverableException) {
                 e = e.getCause();
-                System.out.println("e is : " + e.getMessage());
+                sLogger.log(Level.DEBUG, "e is : " + e.getMessage());
             }
         });
     }
@@ -216,7 +222,7 @@ public class AsyncClient {
     public void writeMsg(int toUid, String body, Map<String, String> header, GenericFutureListener<ChannelFuture> listener) {
 
         if (body.length() > BaseValue.MAX_LENGTH) {
-            System.out.println("超出了value限制的长度 此时body的长度 : " + body.length());
+            sLogger.log(Level.DEBUG, "超出了value限制的长度 此时body的长度 : " + body.length());
             return;
         }
 
@@ -245,8 +251,9 @@ public class AsyncClient {
 
         //String host = "172.18.8.119";
         String host = "127.0.0.1";
+        //String host = "172.20.212.135";
 
-        /*int uid;
+      /* int uid;
         if (args.length != 0) {
             uid = Integer.parseInt(args[0]);
         } else {
@@ -257,15 +264,15 @@ public class AsyncClient {
         AsyncClient client = new AsyncClient(host, 12306, uid);
         client.connect(4, 5, TimeUnit.SECONDS);
         client.setOnMesageReceivedListener(msg -> {
-            System.out.println("收到消息 : " + msg.toString());
+            sLogger.log(Level.DEBUG,"收到消息 : " + msg.toString());
         });
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 
         while (true) {
-            System.out.println("等待输入");
+            sLogger.log(Level.DEBUG,"等待输入");
             try {
                 String msg = br.readLine();
-                System.out.println("msg : " + msg);
+                sLogger.log(Level.DEBUG,"msg : " + msg);
                 String[] uidAndMsg = msg.split(":");
                 int toUid = Integer.parseInt(uidAndMsg[0]);
                 byte[] body = uidAndMsg[1].getBytes(CharsetUtil.UTF_8);
@@ -277,23 +284,20 @@ public class AsyncClient {
             } catch (IOException e) {
                 e.printStackTrace();
             }
-        }
+        }*/
 
-        /*ExecutorService executor = Executors.newFixedThreadPool(2000);
+        ExecutorService executor = Executors.newFixedThreadPool(2000);
         Random random = new Random(40);
-        int maxCount = 30;
+        int maxCount = 25;
+        final AtomicInteger initId = new AtomicInteger(0);
         for (int i = 0; i < maxCount; i++) {
-            final int fromUid = i;
             executor.execute(() -> {
+                int fromUId = initId.incrementAndGet();
 
-                AsyncClient client = new AsyncClient(host, 12306, fromUid);
+                AsyncClient client = new AsyncClient(host, 12306, fromUId);
                 client.connect(4, 5, TimeUnit.SECONDS);
-                client.setOnMesageReceivedListener(new MessageReceiveListener() {
-                    @Override
-                    public void onMessageReceive(MsgValue msg) {
-                        System.out.println(msg.toString());
-                    }
-                });
+                MsgReceiver receiver = new MsgReceiver();
+                client.setOnMesageReceivedListener(receiver);
                 try {
                     Thread.sleep(5000);
                 } catch (InterruptedException e) {
@@ -307,21 +311,72 @@ public class AsyncClient {
                         e.printStackTrace();
                     }
                     String body = getRandomString(30000);
-                    int toUid = random.nextInt(maxCount);
-                    CountDownLatch signal = new CountDownLatch(1);
                     Map<String, String> header = new HashMap<>();
                     header.put("Content-Type", "txt");
                     header.put("Expanded-Name", ".txt");
-                    if (toUid == fromUid) {
-                        System.out.println("忽略自己给自己发消息");
-                        continue;
+                    SyncGet get = new SyncGet(new CountDownLatch(1), 20);
+                    receiver.setSyncGet(get);
+                    client.writeMsgQuietly(fromUId, body, header);
+                    try {
+                        String res = get.getRes();
+                        if (!body.equals(res)) {
+                            sLogger.log(Level.ERROR,"收发消息不一致!!!!!");
+                            break;
+                        }
+                    } catch (InterruptedException e) {
+                        sLogger.log(Level.ERROR, e);
+                    } catch (TimeoutException e) {
+                        sLogger.log(Level.ERROR, e);
+                        sLogger.log(Level.ERROR,"超时，退出!!!");
+                        break;
                     }
-
-                    client.writeMsgQuietly(toUid, body, header);
-
                 }
             });
-        }*/
+        }
+    }
+
+    private static class SyncGet {
+        private final CountDownLatch signal;
+        private String res;
+        private long timeout;
+
+        public SyncGet(CountDownLatch signal, long timeout) {
+            this.signal = signal;
+            this.timeout = timeout;
+        }
+
+        public void setRes(String res) {
+            this.res = res;
+            signal.countDown();
+        }
+
+        public String getRes() throws InterruptedException, TimeoutException {
+            if (!signal.await(timeout, TimeUnit.SECONDS)) {
+                throw new TimeoutException();
+            }
+            return this.res;
+        }
+    }
+
+    private static class MsgReceiver implements MessageReceiveListener {
+
+        private SyncGet get;
+
+        public MsgReceiver() {
+        }
+
+        public void setSyncGet(SyncGet get) {
+            this.get = get;
+        }
+
+        @Override
+        public void onMessageReceive(MsgValue msg) {
+            if (this.get == null) {
+                sLogger.log(Level.ERROR,"this.get == null !!!!!!");
+               return;
+            }
+            this.get.setRes(msg.getBody().getMsg());
+        }
     }
 
     public static String getRandomString(int length) {

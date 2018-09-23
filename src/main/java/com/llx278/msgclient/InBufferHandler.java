@@ -5,13 +5,19 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.CompositeByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.util.Attribute;
 import io.netty.util.ReferenceCountUtil;
+import org.apache.log4j.Level;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 
 public class InBufferHandler extends ChannelInboundHandlerAdapter {
+
+    private static final Logger sLogger = LogManager.getLogger(InBufferHandler.class);
 
     public static final String NAME = "InBufferHandler";
 
@@ -26,17 +32,23 @@ public class InBufferHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-        System.out.println( "channelRead");
+        sLogger.log(Level.DEBUG, "channelRead");
         ByteBuf buf = (ByteBuf) msg;
         mTempReadBufs.add(buf);
     }
 
     @Override
     public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
-        System.out.println( "channelReadComplete");
+        sLogger.log(Level.DEBUG, "channelReadComplete");
 
         CompositeByteBuf tempReadBuf = ctx.alloc().compositeBuffer(mTempReadBufs.size());
         tempReadBuf.addComponents(true, mTempReadBufs);
+
+        if (tempReadBuf.readableBytes() == 0) {
+            sLogger.log(Level.ERROR,"------ eof -----");
+            tempReadBuf.release();
+            return;
+        }
 
         while (findSyncBytes(tempReadBuf)) {
 
@@ -72,20 +84,15 @@ public class InBufferHandler extends ChannelInboundHandlerAdapter {
                 // 这里无法保证消息是始终都能收到的，虽然理论上是可以的
                 // 出现这种情况可能是网络出现了异常波动，所以需要更上层
                 // 的协议来保证消息已经准确送达了
-                System.out.println("读取到了一个无效的msg " + tempReadBuf);
+                sLogger.log(Level.ERROR,"读取到了一个无效的msg " + tempReadBuf);
             }
-        }
-
-        // 没有找到，继续读
-        if (tempReadBuf.readableBytes() != 0) {
-            System.out.println("发现一条未完全读完的消息 长度是 : " + tempReadBuf.readableBytes());
         }
 
         feedLastBytesToTempReadBufs(ctx,tempReadBuf);
 
         // 将读到的消息发送给下一个handler执行
         if (mAlreadyReadBufs.isEmpty()) {
-            System.out.println("already read bufs is empty");
+            sLogger.log(Level.ERROR,"already read bufs is empty");
         }
 
         for (ByteBuf buf : mAlreadyReadBufs) {
@@ -111,7 +118,7 @@ public class InBufferHandler extends ChannelInboundHandlerAdapter {
             dst[2] = cbuf.getByte(index + 2);
             dst[3] = cbuf.getByte(index + 3);
             if (Arrays.equals(TLV.SYNC_BYTES, dst)) {
-                System.out.println( "找到了一条msg的起始");
+                sLogger.log(Level.DEBUG, "找到了一条msg的起始");
                 return true;
             }
             // 消耗掉一个字节
@@ -128,16 +135,25 @@ public class InBufferHandler extends ChannelInboundHandlerAdapter {
         dst[2] = cbuf.getByte(index + 2);
         dst[3] = cbuf.getByte(index + 3);
         if (Arrays.equals(TLV.FINISH_BYTES, dst)) {
-            System.out.println( "找到了一条msg的结束");
+            sLogger.log(Level.DEBUG, "找到了一条msg的结束");
             return true;
         }
         return false;
     }
 
     private void feedLastBytesToTempReadBufs(ChannelHandlerContext ctx, ByteBuf tempReadBuf) {
-        mTempReadBufs.clear();
-        if (tempReadBuf.readableBytes() != 0) {
-            mTempReadBufs.add(tempReadBuf);
+
+        if (tempReadBuf.readableBytes() == 0) {
+            mTempReadBufs.clear();
+            ReferenceCountUtil.release(tempReadBuf,tempReadBuf.refCnt());
+        } else {
+
+            ByteBuf buf = ctx.alloc().buffer();
+            buf.writeBytes(tempReadBuf);
+            tempReadBuf.release();
+            //sLogger.log(Level.DEBUG,"发现一条未完全读完的消息 长度是 : " + tempReadBuf.readableBytes());
+            mTempReadBufs.clear();
+            mTempReadBufs.add(buf);
         }
     }
 

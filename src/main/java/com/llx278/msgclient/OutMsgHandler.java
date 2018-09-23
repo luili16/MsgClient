@@ -6,9 +6,12 @@ import io.netty.buffer.CompositeByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelOutboundHandlerAdapter;
 import io.netty.channel.ChannelPromise;
+import org.apache.log4j.Level;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 public class OutMsgHandler extends ChannelOutboundHandlerAdapter {
-
+    private static final Logger sLogger = LogManager.getLogger(OutMsgHandler.class);
     public static final String NAME = "OutMsgHandler";
 
     @Override
@@ -31,8 +34,7 @@ public class OutMsgHandler extends ChannelOutboundHandlerAdapter {
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-        System.out.println("----------------- out ---------------------");
-        cause.printStackTrace();
+        sLogger.log(Level.ERROR,cause);
         ctx.close();
     }
 }
