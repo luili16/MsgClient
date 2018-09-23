@@ -30,7 +30,7 @@ public class InHeartBeatHandler extends ChannelInboundHandlerAdapter {
                 ByteBuf v = ctx.alloc().buffer();
                 HeartBeatValue.quickWrite(uid,v);
                 TLV.quickCompositeTlvFrame(Type.FRAME_HEART,tlv,tl,v);
-                ChannelFuture f = ctx.writeAndFlush(tlv);
+                ChannelFuture f = ctx.channel().writeAndFlush(tlv);
                 f.addListener(future -> {
                 });
             }

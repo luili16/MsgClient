@@ -246,7 +246,7 @@ public class AsyncClient {
         //String host = "172.18.8.119";
         String host = "127.0.0.1";
 
-        int uid;
+        /*int uid;
         if (args.length != 0) {
             uid = Integer.parseInt(args[0]);
         } else {
@@ -306,7 +306,7 @@ public class AsyncClient {
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     }
-                    String body = getRandomString(random.nextInt(3000));
+                    String body = getRandomString(30000);
                     int toUid = random.nextInt(maxCount);
                     CountDownLatch signal = new CountDownLatch(1);
                     Map<String, String> header = new HashMap<>();
