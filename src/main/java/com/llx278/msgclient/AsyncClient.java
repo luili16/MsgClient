@@ -254,7 +254,7 @@ public class AsyncClient {
         }
         //String mHost = "172.20.151.106";
 
-        /*AsyncClient client = new AsyncClient(host, 12306, uid);
+        AsyncClient client = new AsyncClient(host, 12306, uid);
         client.connect(4, 5, TimeUnit.SECONDS);
         client.setOnMesageReceivedListener(msg -> {
             System.out.println("收到消息 : " + msg.toString());
@@ -277,9 +277,9 @@ public class AsyncClient {
             } catch (IOException e) {
                 e.printStackTrace();
             }
-        }*/
+        }
 
-        ExecutorService executor = Executors.newFixedThreadPool(2000);
+        /*ExecutorService executor = Executors.newFixedThreadPool(2000);
         Random random = new Random(40);
         int maxCount = 30;
         for (int i = 0; i < maxCount; i++) {
@@ -321,7 +321,7 @@ public class AsyncClient {
 
                 }
             });
-        }
+        }*/
     }
 
     public static String getRandomString(int length) {
